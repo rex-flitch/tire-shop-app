@@ -206,3 +206,11 @@ on public.job_status_history
 for select
 to anon
 using (true);
+
+grant usage on schema public to anon;
+
+grant select on public.organizations to anon;
+grant select on public.locations to anon;
+grant select on public.service_types to anon;
+grant select on public.jobs to anon;
+grant select on public.job_status_history to anon;
