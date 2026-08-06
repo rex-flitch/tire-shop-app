@@ -214,3 +214,29 @@ grant select on public.locations to anon;
 grant select on public.service_types to anon;
 grant select on public.jobs to anon;
 grant select on public.job_status_history to anon;
+
+-- Temporary development write permissions.
+-- Replace these when employee authentication is implemented.
+
+grant insert, update on public.jobs to anon;
+grant usage, select on sequence public.job_status_history_id_seq to anon;
+grant insert on public.job_status_history to anon;
+
+create policy "Temporary public job creation"
+on public.jobs
+for insert
+to anon
+with check (true);
+
+create policy "Temporary public job updating"
+on public.jobs
+for update
+to anon
+using (true)
+with check (true);
+
+create policy "Temporary public history creation"
+on public.job_status_history
+for insert
+to anon
+with check (true);
