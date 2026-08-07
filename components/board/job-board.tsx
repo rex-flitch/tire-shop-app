@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import BoardColumn from "@/components/board/board-column";
 import EmployeePanel from "@/components/employees/employee-panel";
-import { getEmployees } from "@/lib/api/employees";
-import { getJobs } from "@/lib/api/jobs";
-import { supabase } from "@/lib/supabase/client";
+import { moveJobAction } from "@/app/actions/jobs";
+import { getBrowserEmployees } from "@/lib/api/employees";
+import { getBrowserJobs } from "@/lib/api/jobs";
+import { supabase } from "@/lib/supabase/browser";
 import type { Employee } from "@/types/employee";
 import type { Job, JobStatus } from "@/types/job";
 
@@ -17,12 +18,6 @@ type JobBoardProps = {
 type ColumnDefinition = {
   status: JobStatus;
   title: string;
-};
-
-type DatabaseUpdates = {
-  status: JobStatus;
-  started_at?: string | null;
-  completed_at?: string | null;
 };
 
 const columns: ColumnDefinition[] = [
@@ -53,8 +48,9 @@ export default function JobBoard({
 
   const loadJobs = useCallback(async () => {
     try {
-      const updatedJobs = await getJobs();
-
+      const updatedJobs =
+        await getBrowserJobs();
+  
       setJobs(updatedJobs);
       setMessage(null);
     } catch (error) {
@@ -62,15 +58,16 @@ export default function JobBoard({
         error instanceof Error
           ? error.message
           : "The jobs could not be loaded.";
-
+  
       setMessage(errorMessage);
     }
   }, []);
 
   const loadEmployees = useCallback(async () => {
     try {
-      const updatedEmployees = await getEmployees();
-
+      const updatedEmployees =
+        await getBrowserEmployees();
+  
       setEmployees(updatedEmployees);
       setMessage(null);
     } catch (error) {
@@ -78,7 +75,7 @@ export default function JobBoard({
         error instanceof Error
           ? error.message
           : "The employees could not be loaded.";
-
+  
       setMessage(errorMessage);
     }
   }, []);
@@ -155,47 +152,30 @@ export default function JobBoard({
     };
   }, [loadEmployees, loadJobs]);
 
-  async function moveJob(job: Job, nextStatus: JobStatus) {
+  async function moveJob(
+    job: Job,
+    nextStatus: JobStatus,
+  ) {
     setMessage(null);
     setMovingJobId(job.id);
-
-    const now = new Date().toISOString();
-
-    const updates: DatabaseUpdates = {
-      status: nextStatus,
-    };
-
-    if (nextStatus === "queue") {
-      updates.started_at = null;
-      updates.completed_at = null;
-    }
-
-    if (nextStatus === "in_progress") {
-      updates.started_at = job.started_at ?? now;
-      updates.completed_at = null;
-    }
-
-    if (nextStatus === "completed") {
-      updates.started_at = job.started_at ?? now;
-      updates.completed_at = now;
-    }
-
-    const { error } = await supabase
-      .from("jobs")
-      .update(updates)
-      .eq("id", job.id);
-
-    if (error) {
-      setMessage(error.message);
+  
+    const result = await moveJobAction(
+      job.id,
+      job.started_at,
+      nextStatus,
+    );
+  
+    if (!result.success) {
+      setMessage(result.message);
       setMovingJobId(null);
       return;
     }
-
+  
     await Promise.all([
       loadJobs(),
       loadEmployees(),
     ]);
-
+  
     setMovingJobId(null);
   }
 

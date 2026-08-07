@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabase as browserSupabase } from "@/lib/supabase/browser";
 import type {
   Employee,
   EmployeeActiveJob,
@@ -18,27 +19,32 @@ type RawAttendanceSession = EmployeeAttendanceSession & {
   employee_id: string;
 };
 
+type RawRelatedJob =
+  | {
+      id: string;
+      customer_name: string;
+      status: string;
+    }
+  | Array<{
+      id: string;
+      customer_name: string;
+      status: string;
+    }>
+  | null;
+
 type RawActiveAssignment = {
   id: string;
   employee_id: string;
   job_id: string;
-  jobs:
-    | {
-        id: string;
-        customer_name: string;
-      }
-    | Array<{
-        id: string;
-        customer_name: string;
-      }>
-    | null;
+  jobs: RawRelatedJob;
 };
 
 function normalizeRelatedJob(
-  relatedJob: RawActiveAssignment["jobs"],
+  relatedJob: RawRelatedJob,
 ): {
   id: string;
   customer_name: string;
+  status: string;
 } | null {
   if (Array.isArray(relatedJob)) {
     return relatedJob[0] ?? null;
@@ -47,7 +53,9 @@ function normalizeRelatedJob(
   return relatedJob;
 }
 
-export async function getEmployees(): Promise<Employee[]> {
+export async function queryEmployees(
+  supabase: SupabaseClient,
+): Promise<Employee[]> {
   const [
     employeesResponse,
     attendanceResponse,
@@ -88,7 +96,8 @@ export async function getEmployees(): Promise<Employee[]> {
         job_id,
         jobs!job_assignments_job_id_fkey (
           id,
-          customer_name
+          customer_name,
+          status
         )
       `)
       .is("unassigned_at", null),
@@ -123,12 +132,13 @@ export async function getEmployees(): Promise<Employee[]> {
 
     const activeJobs = activeAssignments
       .filter(
-        (assignment) => assignment.employee_id === employee.id,
+        (assignment) =>
+          assignment.employee_id === employee.id,
       )
       .map((assignment): EmployeeActiveJob | null => {
         const job = normalizeRelatedJob(assignment.jobs);
 
-        if (!job) {
+        if (!job || job.status === "completed") {
           return null;
         }
 
@@ -149,4 +159,10 @@ export async function getEmployees(): Promise<Employee[]> {
       active_jobs: activeJobs,
     };
   });
+}
+
+export async function getBrowserEmployees(): Promise<
+  Employee[]
+> {
+  return queryEmployees(browserSupabase);
 }

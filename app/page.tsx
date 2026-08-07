@@ -1,11 +1,11 @@
 import JobBoard from "@/components/board/job-board";
-import { getEmployees } from "@/lib/api/employees";
-import { getJobs } from "@/lib/api/jobs";
+import { getServerEmployees } from "@/lib/api/employees.server";
+import { getServerJobs } from "@/lib/api/jobs.server";
 
 export default async function Home() {
   const [jobs, employees] = await Promise.all([
-    getJobs(),
-    getEmployees(),
+    getServerJobs(),
+    getServerEmployees(),
   ]);
 
   return (

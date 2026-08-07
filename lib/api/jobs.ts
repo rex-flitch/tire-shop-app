@@ -1,10 +1,9 @@
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/browser";
 import type {
   AssignedEmployee,
   Job,
   JobAssignment,
   JobService,
-  JobStatus,
 } from "@/types/job";
 
 export const jobFields = `
@@ -46,13 +45,22 @@ export const jobFields = `
   )
 `;
 
-type RawEmployee = AssignedEmployee | AssignedEmployee[] | null;
+type RawEmployee =
+  | AssignedEmployee
+  | AssignedEmployee[]
+  | null;
 
-type RawJobAssignment = Omit<JobAssignment, "employee"> & {
+type RawJobAssignment = Omit<
+  JobAssignment,
+  "employee"
+> & {
   employee: RawEmployee;
 };
 
-type RawJob = Omit<Job, "job_assignments"> & {
+type RawJob = Omit<
+  Job,
+  "job_assignments" | "job_services"
+> & {
   job_services: JobService[] | null;
   job_assignments: RawJobAssignment[] | null;
 };
@@ -67,7 +75,7 @@ function normalizeEmployee(
   return employee;
 }
 
-function normalizeJob(rawJob: RawJob): Job {
+export function normalizeJob(rawJob: RawJob): Job {
   return {
     ...rawJob,
     job_services: rawJob.job_services ?? [],
@@ -80,7 +88,7 @@ function normalizeJob(rawJob: RawJob): Job {
   };
 }
 
-export async function getJobs(): Promise<Job[]> {
+export async function getBrowserJobs(): Promise<Job[]> {
   const { data, error } = await supabase
     .from("jobs")
     .select(jobFields)
@@ -95,5 +103,7 @@ export async function getJobs(): Promise<Job[]> {
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as unknown as RawJob[]).map(normalizeJob);
+  return ((data ?? []) as unknown as RawJob[]).map(
+    normalizeJob,
+  );
 }
