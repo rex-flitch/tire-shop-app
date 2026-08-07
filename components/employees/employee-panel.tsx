@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase/browser";
+import {
+  checkInEmployeeAction,
+  checkOutEmployeeAction,
+} from "@/app/actions/attendance";
 import {
   getEmployeeFullName,
   isEmployeeCheckedIn,
@@ -26,47 +29,48 @@ export default function EmployeePanel({
     setMessage(null);
     setUpdatingEmployeeId(employee.id);
 
-    const { error } = await supabase
-      .from("attendance_sessions")
-      .insert({
-        employee_id: employee.id,
-        checked_in_at: new Date().toISOString(),
-      });
+    try {
+      const result = await checkInEmployeeAction(employee.id);
 
-    if (error) {
-      setMessage(error.message);
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+
+      await onAttendanceChanged();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The employee could not be checked in.",
+      );
+    } finally {
       setUpdatingEmployeeId(null);
-      return;
     }
-
-    await onAttendanceChanged();
-    setUpdatingEmployeeId(null);
   }
 
   async function checkOut(employee: Employee) {
-    if (!employee.attendance_session) {
-      return;
-    }
-
     setMessage(null);
     setUpdatingEmployeeId(employee.id);
 
-    const { error } = await supabase
-      .from("attendance_sessions")
-      .update({
-        checked_out_at: new Date().toISOString(),
-      })
-      .eq("id", employee.attendance_session.id)
-      .is("checked_out_at", null);
+    try {
+      const result = await checkOutEmployeeAction(employee.id);
 
-    if (error) {
-      setMessage(error.message);
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+
+      await onAttendanceChanged();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The employee could not be checked out.",
+      );
+    } finally {
       setUpdatingEmployeeId(null);
-      return;
     }
-
-    await onAttendanceChanged();
-    setUpdatingEmployeeId(null);
   }
 
   const activeEmployees = employees.filter(
@@ -173,9 +177,7 @@ export default function EmployeePanel({
                     <button
                       type="button"
                       disabled={isUpdating}
-                      onClick={() =>
-                        void checkOut(employee)
-                      }
+                      onClick={() => void checkOut(employee)}
                       className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isUpdating
@@ -186,9 +188,7 @@ export default function EmployeePanel({
                     <button
                       type="button"
                       disabled={isUpdating}
-                      onClick={() =>
-                        void checkIn(employee)
-                      }
+                      onClick={() => void checkIn(employee)}
                       className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isUpdating
