@@ -1,4 +1,4 @@
-import JobBoard from "@/components/job-board";
+import JobBoard from "@/components/board/job-board";
 import { getEmployees } from "@/lib/api/employees";
 import { getJobs } from "@/lib/api/jobs";
 
