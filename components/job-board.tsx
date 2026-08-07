@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import EmployeePanel from "@/components/employees/employee-panel";
+import { getEmployees } from "@/lib/api/employees";
 import { getJobs } from "@/lib/api/jobs";
 import { supabase } from "@/lib/supabase/client";
+import type { Employee } from "@/types/employee";
 import type {
   Job,
   JobAssignment,
@@ -11,6 +14,7 @@ import type {
 
 type JobBoardProps = {
   initialJobs: Job[];
+  initialEmployees: Employee[];
 };
 
 type ColumnDefinition = {
@@ -39,8 +43,14 @@ const columns: ColumnDefinition[] = [
   },
 ];
 
-export default function JobBoard({ initialJobs }: JobBoardProps) {
+export default function JobBoard({
+  initialJobs,
+  initialEmployees,
+}: JobBoardProps) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [employees, setEmployees] =
+    useState<Employee[]>(initialEmployees);
+
   const [message, setMessage] = useState<string | null>(null);
   const [movingJobId, setMovingJobId] = useState<string | null>(null);
 
@@ -60,6 +70,22 @@ export default function JobBoard({ initialJobs }: JobBoardProps) {
     }
   }, []);
 
+  const loadEmployees = useCallback(async () => {
+    try {
+      const updatedEmployees = await getEmployees();
+
+      setEmployees(updatedEmployees);
+      setMessage(null);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "The employees could not be loaded.";
+
+      setMessage(errorMessage);
+    }
+  }, []);
+
   useEffect(() => {
     const jobsChannel = supabase
       .channel("jobs-board")
@@ -72,14 +98,65 @@ export default function JobBoard({ initialJobs }: JobBoardProps) {
         },
         () => {
           void loadJobs();
+          void loadEmployees();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_services",
+        },
+        () => {
+          void loadJobs();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_assignments",
+        },
+        () => {
+          void loadJobs();
+          void loadEmployees();
+        },
+      )
+      .subscribe();
+
+    const employeesChannel = supabase
+      .channel("employees-panel")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "employees",
+        },
+        () => {
+          void loadEmployees();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "attendance_sessions",
+        },
+        () => {
+          void loadEmployees();
         },
       )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(jobsChannel);
+      void supabase.removeChannel(employeesChannel);
     };
-  }, [loadJobs]);
+  }, [loadEmployees, loadJobs]);
 
   async function moveJob(job: Job, nextStatus: JobStatus) {
     setMessage(null);
@@ -117,7 +194,11 @@ export default function JobBoard({ initialJobs }: JobBoardProps) {
       return;
     }
 
-    await loadJobs();
+    await Promise.all([
+      loadJobs(),
+      loadEmployees(),
+    ]);
+
     setMovingJobId(null);
   }
 
@@ -137,6 +218,11 @@ export default function JobBoard({ initialJobs }: JobBoardProps) {
             {jobs.length} jobs loaded from PostgreSQL
           </p>
         </header>
+
+        <EmployeePanel
+          employees={employees}
+          onAttendanceChanged={loadEmployees}
+        />
 
         {message && (
           <div
