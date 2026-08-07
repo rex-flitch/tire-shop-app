@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getJobs } from "@/lib/api/jobs";
 import { supabase } from "@/lib/supabase/client";
-import type { Job, JobStatus } from "@/types/job";
+import type {
+  Job,
+  JobAssignment,
+  JobStatus,
+} from "@/types/job";
 
 type JobBoardProps = {
   initialJobs: Job[];
@@ -34,54 +39,29 @@ const columns: ColumnDefinition[] = [
   },
 ];
 
-const jobFields = `
-  id,
-  organization_id,
-  location_id,
-  customer_name,
-  customer_phone,
-  vehicle_year,
-  vehicle_make,
-  vehicle_model,
-  license_plate,
-  service_description,
-  status,
-  estimated_minutes,
-  priority,
-  assigned_employee_name,
-  queued_at,
-  started_at,
-  completed_at,
-  business_date
-`;
-
 export default function JobBoard({ initialJobs }: JobBoardProps) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [message, setMessage] = useState<string | null>(null);
   const [movingJobId, setMovingJobId] = useState<string | null>(null);
 
   const loadJobs = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("jobs")
-      .select(jobFields)
-      .order("priority", {
-        ascending: false,
-      })
-      .order("queued_at", {
-        ascending: true,
-      });
+    try {
+      const updatedJobs = await getJobs();
 
-    if (error) {
-      setMessage(error.message);
-      return;
+      setJobs(updatedJobs);
+      setMessage(null);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "The jobs could not be loaded.";
+
+      setMessage(errorMessage);
     }
-
-    setJobs((data ?? []) as Job[]);
-    setMessage(null);
   }, []);
 
   useEffect(() => {
-    const channel = supabase
+    const jobsChannel = supabase
       .channel("jobs-board")
       .on(
         "postgres_changes",
@@ -97,7 +77,7 @@ export default function JobBoard({ initialJobs }: JobBoardProps) {
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(jobsChannel);
     };
   }, [loadJobs]);
 
@@ -259,6 +239,14 @@ function JobCard({
     .filter(Boolean)
     .join(" ");
 
+  const currentAssignments = job.job_assignments.filter(
+    (assignment) => assignment.unassigned_at === null,
+  );
+
+  const historicalAssignments = job.job_assignments.filter(
+    (assignment) => assignment.unassigned_at !== null,
+  );
+
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -278,21 +266,71 @@ function JobCard({
       </div>
 
       <div className="mt-4 border-t border-slate-100 pt-3">
-        <p className="text-sm font-medium text-slate-800">
-          {job.service_description}
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Services
         </p>
 
+        {job.job_services.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            No services selected
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {job.job_services.map((service) => (
+              <li
+                key={service.id}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span className="font-medium text-slate-800">
+                  {service.service_name}
+                </span>
+
+                <span className="shrink-0 text-xs text-slate-500">
+                  {service.estimated_minutes} min
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {job.license_plate && (
-          <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+          <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
             Plate: {job.license_plate}
           </p>
         )}
+      </div>
 
-        <p className="mt-3 text-xs text-slate-500">
-          {job.assigned_employee_name
-            ? `Assigned to ${job.assigned_employee_name}`
-            : "Unassigned"}
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Assigned Employees
         </p>
+
+        {currentAssignments.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            Unassigned
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {currentAssignments.map((assignment) => (
+              <AssignmentName
+                key={assignment.id}
+                assignment={assignment}
+              />
+            ))}
+          </div>
+        )}
+
+        {columnStatus === "completed" &&
+          historicalAssignments.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {historicalAssignments.map((assignment) => (
+                <AssignmentName
+                  key={assignment.id}
+                  assignment={assignment}
+                />
+              ))}
+            </div>
+          )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -330,5 +368,34 @@ function JobCard({
         )}
       </div>
     </article>
+  );
+}
+
+type AssignmentNameProps = {
+  assignment: JobAssignment;
+};
+
+function AssignmentName({ assignment }: AssignmentNameProps) {
+  const employee = assignment.employee;
+
+  if (!employee) {
+    return (
+      <p className="text-sm text-amber-700">
+        Employee record unavailable
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-sm text-slate-700">
+      <span
+        aria-hidden="true"
+        className="h-2 w-2 rounded-full bg-emerald-500"
+      />
+
+      <span>
+        {employee.first_name} {employee.last_name}
+      </span>
+    </div>
   );
 }

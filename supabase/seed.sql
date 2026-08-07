@@ -3,6 +3,11 @@ declare
   demo_organization_id uuid;
   demo_location_id uuid;
 
+  marcus_employee_id uuid;
+  elena_employee_id uuid;
+  chris_employee_id uuid;
+  sam_employee_id uuid;
+
   alex_job_id uuid;
   jordan_job_id uuid;
   taylor_job_id uuid;
@@ -31,7 +36,7 @@ begin
   )
   returning id into demo_location_id;
 
-  -- Create the shop's editable job types.
+  -- Create editable service types.
   insert into public.service_types (
     organization_id,
     name,
@@ -82,6 +87,107 @@ begin
       true
     );
 
+  -- Create employees.
+  insert into public.employees (
+    organization_id,
+    location_id,
+    first_name,
+    last_name,
+    active
+  )
+  values (
+    demo_organization_id,
+    demo_location_id,
+    'Marcus',
+    'Reed',
+    true
+  )
+  returning id into marcus_employee_id;
+
+  insert into public.employees (
+    organization_id,
+    location_id,
+    first_name,
+    last_name,
+    active
+  )
+  values (
+    demo_organization_id,
+    demo_location_id,
+    'Elena',
+    'Torres',
+    true
+  )
+  returning id into elena_employee_id;
+
+  insert into public.employees (
+    organization_id,
+    location_id,
+    first_name,
+    last_name,
+    active
+  )
+  values (
+    demo_organization_id,
+    demo_location_id,
+    'Chris',
+    'Miller',
+    true
+  )
+  returning id into chris_employee_id;
+
+  insert into public.employees (
+    organization_id,
+    location_id,
+    first_name,
+    last_name,
+    active
+  )
+  values (
+    demo_organization_id,
+    demo_location_id,
+    'Sam',
+    'Wilson',
+    true
+  )
+  returning id into sam_employee_id;
+
+  -- Check in Marcus, Elena, and Chris.
+  insert into public.attendance_sessions (
+    employee_id,
+    checked_in_at,
+    checked_out_at
+  )
+  values
+    (
+      marcus_employee_id,
+      now() - interval '4 hours',
+      null
+    ),
+    (
+      elena_employee_id,
+      now() - interval '3 hours 30 minutes',
+      null
+    ),
+    (
+      chris_employee_id,
+      now() - interval '2 hours',
+      null
+    );
+
+  -- Create a completed attendance session for Sam.
+  -- Sam is currently checked out and should not appear as assignable.
+  insert into public.attendance_sessions (
+    employee_id,
+    checked_in_at,
+    checked_out_at
+  )
+  values (
+    sam_employee_id,
+    now() - interval '8 hours',
+    now() - interval '1 hour'
+  );
+
   -- Create Alex's queued job.
   insert into public.jobs (
     organization_id,
@@ -123,7 +229,7 @@ begin
   )
   returning id into alex_job_id;
 
-  -- Attach Alex's selected service.
+  -- Attach Alex's service.
   insert into public.job_services (
     job_id,
     service_type_id,
@@ -138,6 +244,18 @@ begin
   from public.service_types
   where organization_id = demo_organization_id
     and name = 'Install All Tires';
+
+  -- Assign Chris to Alex's job.
+  insert into public.job_assignments (
+    job_id,
+    employee_id,
+    assigned_at
+  )
+  values (
+    alex_job_id,
+    chris_employee_id,
+    now() - interval '10 minutes'
+  );
 
   -- Create Jordan's in-progress job.
   insert into public.jobs (
@@ -172,7 +290,7 @@ begin
     'in_progress'::public.job_status,
     20,
     0,
-    'Marcus',
+    null,
     now() - interval '47 minutes',
     now() - interval '14 minutes',
     null,
@@ -180,7 +298,7 @@ begin
   )
   returning id into jordan_job_id;
 
-  -- Attach Jordan's selected service.
+  -- Attach Jordan's service.
   insert into public.job_services (
     job_id,
     service_type_id,
@@ -195,6 +313,18 @@ begin
   from public.service_types
   where organization_id = demo_organization_id
     and name = 'Flat Repair/Single Tire';
+
+  -- Assign Marcus to Jordan's job.
+  insert into public.job_assignments (
+    job_id,
+    employee_id,
+    assigned_at
+  )
+  values (
+    jordan_job_id,
+    marcus_employee_id,
+    now() - interval '14 minutes'
+  );
 
   -- Create Taylor's completed job with two services.
   insert into public.jobs (
@@ -229,7 +359,7 @@ begin
     'completed'::public.job_status,
     45,
     0,
-    'Elena',
+    null,
     now() - interval '90 minutes',
     now() - interval '58 minutes',
     now() - interval '25 minutes',
@@ -237,7 +367,7 @@ begin
   )
   returning id into taylor_job_id;
 
-  -- Attach both selected services to Taylor's job.
+  -- Attach both services to Taylor's job.
   insert into public.job_services (
     job_id,
     service_type_id,
@@ -255,5 +385,28 @@ begin
       'Tire Rotation',
       'Balance Tires'
     );
+
+  -- Assign Elena and Marcus to Taylor's completed job.
+  insert into public.job_assignments (
+    job_id,
+    employee_id,
+    assigned_at
+  )
+  values
+    (
+      taylor_job_id,
+      elena_employee_id,
+      now() - interval '58 minutes'
+    ),
+    (
+      taylor_job_id,
+      marcus_employee_id,
+      now() - interval '50 minutes'
+    );
+
+  -- Mark the completed job assignments as finished.
+  update public.job_assignments
+  set unassigned_at = now() - interval '25 minutes'
+  where job_id = taylor_job_id;
 end
 $$;

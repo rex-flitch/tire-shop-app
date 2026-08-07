@@ -1,20 +1,12 @@
 select
   jobs.customer_name,
-  jobs.estimated_minutes as job_total,
-  string_agg(
-    job_services.service_name
-      || ' (' 
-      || job_services.estimated_minutes 
-      || ' min)',
-    ', '
-    order by job_services.created_at
-  ) as selected_services,
-  sum(job_services.estimated_minutes) as calculated_total
-from public.jobs
-join public.job_services
-  on job_services.job_id = jobs.id
-group by
-  jobs.id,
-  jobs.customer_name,
-  jobs.estimated_minutes
+  employees.first_name,
+  employees.last_name,
+  job_assignments.assigned_at
+from public.job_assignments
+join public.jobs
+  on jobs.id = job_assignments.job_id
+join public.employees
+  on employees.id = job_assignments.employee_id
+where job_assignments.unassigned_at is null
 order by jobs.customer_name;
