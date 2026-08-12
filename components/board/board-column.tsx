@@ -1,20 +1,28 @@
 import JobCard from "@/components/jobs/job-card";
+import type { Employee } from "@/types/employee";
 import type { Job, JobStatus } from "@/types/job";
 
 type BoardColumnProps = {
   title: string;
   status: JobStatus;
   jobs: Job[];
+  employees: Employee[];
   movingJobId: string | null;
-  onMoveJob: (job: Job, nextStatus: JobStatus) => Promise<void>;
+  onMoveJob: (
+    job: Job,
+    nextStatus: JobStatus,
+  ) => Promise<void>;
+  onAssignmentsChanged: () => Promise<void>;
 };
 
 export default function BoardColumn({
   title,
   status,
   jobs,
+  employees,
   movingJobId,
   onMoveJob,
+  onAssignmentsChanged,
 }: BoardColumnProps) {
   return (
     <section className="min-h-96 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -38,9 +46,13 @@ export default function BoardColumn({
             <JobCard
               key={job.id}
               job={job}
+              employees={employees}
               columnStatus={status}
               isMoving={movingJobId === job.id}
               onMoveJob={onMoveJob}
+              onAssignmentsChanged={
+                onAssignmentsChanged
+              }
             />
           ))}
         </div>

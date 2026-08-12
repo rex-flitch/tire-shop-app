@@ -1,8 +1,6 @@
-alter publication supabase_realtime
-add table public.employees;
-
-alter publication supabase_realtime
-add table public.attendance_sessions;
-
-alter publication supabase_realtime
-add table public.job_assignments;
+select
+  schemaname,
+  tablename
+from pg_publication_tables
+where pubname = 'supabase_realtime'
+order by schemaname, tablename;

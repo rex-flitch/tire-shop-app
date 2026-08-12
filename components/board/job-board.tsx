@@ -1,22 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import BoardColumn from "@/components/board/board-column";
-import EmployeePanel from "@/components/employees/employee-panel";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { moveJobAction } from "@/app/actions/jobs";
+import BoardColumn from "@/components/board/board-column";
+import CompletedDrawer from "@/components/board/completed-drawer";
+import EmployeePanel from "@/components/employees/employee-panel";
 import { getBrowserEmployees } from "@/lib/api/employees";
 import { getBrowserJobs } from "@/lib/api/jobs";
 import { supabase } from "@/lib/supabase/browser";
 import type { Employee } from "@/types/employee";
-import type { Job, JobStatus } from "@/types/job";
+import type {
+  Job,
+  JobStatus,
+} from "@/types/job";
 
 type JobBoardProps = {
   initialJobs: Job[];
   initialEmployees: Employee[];
 };
 
+type ActiveJobStatus =
+  | "queue"
+  | "in_progress";
+
 type ColumnDefinition = {
-  status: JobStatus;
+  status: ActiveJobStatus;
   title: string;
 };
 
@@ -29,56 +41,68 @@ const columns: ColumnDefinition[] = [
     status: "in_progress",
     title: "In Progress",
   },
-  {
-    status: "completed",
-    title: "Completed",
-  },
 ];
 
 export default function JobBoard({
   initialJobs,
   initialEmployees,
 }: JobBoardProps) {
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [jobs, setJobs] =
+    useState<Job[]>(initialJobs);
+
   const [employees, setEmployees] =
-    useState<Employee[]>(initialEmployees);
+    useState<Employee[]>(
+      initialEmployees,
+    );
 
-  const [message, setMessage] = useState<string | null>(null);
-  const [movingJobId, setMovingJobId] = useState<string | null>(null);
+  const [message, setMessage] =
+    useState<string | null>(null);
 
-  const loadJobs = useCallback(async () => {
-    try {
-      const updatedJobs =
-        await getBrowserJobs();
-  
-      setJobs(updatedJobs);
-      setMessage(null);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "The jobs could not be loaded.";
-  
-      setMessage(errorMessage);
-    }
-  }, []);
+  const [movingJobId, setMovingJobId] =
+    useState<string | null>(null);
 
-  const loadEmployees = useCallback(async () => {
-    try {
-      const updatedEmployees =
-        await getBrowserEmployees();
-  
-      setEmployees(updatedEmployees);
-      setMessage(null);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "The employees could not be loaded.";
-  
-      setMessage(errorMessage);
-    }
-  }, []);
+  const [
+    completedDrawerOpen,
+    setCompletedDrawerOpen,
+  ] = useState(false);
+
+  const loadJobs = useCallback(
+    async () => {
+      try {
+        const updatedJobs =
+          await getBrowserJobs();
+
+        setJobs(updatedJobs);
+        setMessage(null);
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "The jobs could not be loaded.",
+        );
+      }
+    },
+    [],
+  );
+
+  const loadEmployees = useCallback(
+    async () => {
+      try {
+        const updatedEmployees =
+          await getBrowserEmployees();
+
+        setEmployees(updatedEmployees);
+        setMessage(null);
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "The employees could not be loaded.",
+        );
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const jobsChannel = supabase
@@ -120,35 +144,41 @@ export default function JobBoard({
       )
       .subscribe();
 
-    const employeesChannel = supabase
-      .channel("employees-panel")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "employees",
-        },
-        () => {
-          void loadEmployees();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "attendance_sessions",
-        },
-        () => {
-          void loadEmployees();
-        },
-      )
-      .subscribe();
+    const employeesChannel =
+      supabase
+        .channel("employees-panel")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "employees",
+          },
+          () => {
+            void loadEmployees();
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "attendance_sessions",
+          },
+          () => {
+            void loadEmployees();
+          },
+        )
+        .subscribe();
 
     return () => {
-      void supabase.removeChannel(jobsChannel);
-      void supabase.removeChannel(employeesChannel);
+      void supabase.removeChannel(
+        jobsChannel,
+      );
+
+      void supabase.removeChannel(
+        employeesChannel,
+      );
     };
   }, [loadEmployees, loadJobs]);
 
@@ -158,26 +188,62 @@ export default function JobBoard({
   ) {
     setMessage(null);
     setMovingJobId(job.id);
-  
-    const result = await moveJobAction(
-      job.id,
-      job.started_at,
-      nextStatus,
-    );
-  
-    if (!result.success) {
-      setMessage(result.message);
+
+    try {
+      const result =
+        await moveJobAction(
+          job.id,
+          job.started_at,
+          nextStatus,
+        );
+
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+
+      await Promise.all([
+        loadJobs(),
+        loadEmployees(),
+      ]);
+    } finally {
       setMovingJobId(null);
-      return;
     }
-  
-    await Promise.all([
-      loadJobs(),
-      loadEmployees(),
-    ]);
-  
-    setMovingJobId(null);
   }
+
+  const handleAssignmentsChanged =
+    useCallback(async () => {
+      await Promise.all([
+        loadJobs(),
+        loadEmployees(),
+      ]);
+    }, [
+      loadEmployees,
+      loadJobs,
+    ]);
+
+  const completedJobs = jobs
+    .filter(
+      (job) =>
+        job.status === "completed",
+    )
+    .sort((a, b) => {
+      const aTime =
+        a.completed_at
+          ? new Date(
+              a.completed_at,
+            ).getTime()
+          : 0;
+
+      const bTime =
+        b.completed_at
+          ? new Date(
+              b.completed_at,
+            ).getTime()
+          : 0;
+
+      return bTime - aTime;
+    });
 
   return (
     <main className="min-h-screen bg-slate-100 p-6">
@@ -192,13 +258,29 @@ export default function JobBoard({
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
-            {jobs.length} jobs loaded from PostgreSQL
+            {
+              jobs.filter(
+                (job) =>
+                  job.status !==
+                  "completed",
+              ).length
+            }{" "}
+            active{" "}
+            {jobs.filter(
+              (job) =>
+                job.status !==
+                "completed",
+            ).length === 1
+              ? "job"
+              : "jobs"}
           </p>
         </header>
 
         <EmployeePanel
           employees={employees}
-          onAttendanceChanged={loadEmployees}
+          onAttendanceChanged={
+            loadEmployees
+          }
         />
 
         {message && (
@@ -210,25 +292,94 @@ export default function JobBoard({
           </div>
         )}
 
-        <section className="grid gap-6 lg:grid-cols-3">
-          {columns.map((column) => {
-            const columnJobs = jobs.filter(
-              (job) => job.status === column.status,
-            );
+        <section className="grid gap-6 lg:grid-cols-2">
+          {columns.map(
+            (column) => {
+              const columnJobs =
+                jobs.filter(
+                  (job) =>
+                    job.status ===
+                    column.status,
+                );
 
-            return (
-              <BoardColumn
-                key={column.status}
-                title={column.title}
-                status={column.status}
-                jobs={columnJobs}
-                movingJobId={movingJobId}
-                onMoveJob={moveJob}
-              />
-            );
-          })}
+              return (
+                <BoardColumn
+                  key={
+                    column.status
+                  }
+                  title={
+                    column.title
+                  }
+                  status={
+                    column.status
+                  }
+                  jobs={
+                    columnJobs
+                  }
+                  employees={
+                    employees
+                  }
+                  movingJobId={
+                    movingJobId
+                  }
+                  onMoveJob={
+                    moveJob
+                  }
+                  onAssignmentsChanged={
+                    handleAssignmentsChanged
+                  }
+                />
+              );
+            },
+          )}
+        </section>
+
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <button
+            type="button"
+            onClick={() =>
+              setCompletedDrawerOpen(
+                true,
+              )
+            }
+            className="flex w-full items-center justify-between gap-4 text-left"
+          >
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Today
+              </p>
+
+              <h2 className="mt-1 text-lg font-bold text-slate-900">
+                Completed Jobs
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                {
+                  completedJobs.length
+                }
+              </span>
+
+              <span className="text-sm font-semibold text-slate-700">
+                View Completed →
+              </span>
+            </div>
+          </button>
         </section>
       </div>
+
+      <CompletedDrawer
+        jobs={completedJobs}
+        isOpen={
+          completedDrawerOpen
+        }
+        onClose={() =>
+          setCompletedDrawerOpen(
+            false,
+          )
+        }
+      />
     </main>
   );
 }

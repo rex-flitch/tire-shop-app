@@ -32,5 +32,27 @@ begin
     alter publication supabase_realtime
     add table public.job_assignments;
   end if;
+
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'job_services'
+  ) then
+    alter publication supabase_realtime
+    add table public.job_services;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'jobs'
+  ) then
+    alter publication supabase_realtime
+    add table public.jobs;
+  end if;
 end
 $$;
