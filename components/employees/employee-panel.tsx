@@ -13,24 +13,36 @@ import {
 
 type EmployeePanelProps = {
   employees: Employee[];
+  currentEmployee: Employee;
   onAttendanceChanged: () => Promise<void>;
 };
 
 export default function EmployeePanel({
   employees,
+  currentEmployee,
   onAttendanceChanged,
 }: EmployeePanelProps) {
-  const [updatingEmployeeId, setUpdatingEmployeeId] =
+  const [
+    updatingEmployeeId,
+    setUpdatingEmployeeId,
+  ] = useState<string | null>(null);
+
+  const [message, setMessage] =
     useState<string | null>(null);
 
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function checkIn(employee: Employee) {
+  async function checkIn(
+    employee: Employee,
+  ) {
     setMessage(null);
-    setUpdatingEmployeeId(employee.id);
+    setUpdatingEmployeeId(
+      employee.id,
+    );
 
     try {
-      const result = await checkInEmployeeAction(employee.id);
+      const result =
+        await checkInEmployeeAction(
+          employee.id,
+        );
 
       if (!result.success) {
         setMessage(result.message);
@@ -49,12 +61,19 @@ export default function EmployeePanel({
     }
   }
 
-  async function checkOut(employee: Employee) {
+  async function checkOut(
+    employee: Employee,
+  ) {
     setMessage(null);
-    setUpdatingEmployeeId(employee.id);
+    setUpdatingEmployeeId(
+      employee.id,
+    );
 
     try {
-      const result = await checkOutEmployeeAction(employee.id);
+      const result =
+        await checkOutEmployeeAction(
+          employee.id,
+        );
 
       if (!result.success) {
         setMessage(result.message);
@@ -73,13 +92,22 @@ export default function EmployeePanel({
     }
   }
 
-  const activeEmployees = employees.filter(
-    (employee) => employee.active,
-  );
+  const activeEmployees =
+    employees.filter(
+      (employee) =>
+        employee.active,
+    );
 
-  const checkedInCount = activeEmployees.filter(
-    isEmployeeCheckedIn,
-  ).length;
+  const checkedInCount =
+    activeEmployees.filter(
+      isEmployeeCheckedIn,
+    ).length;
+
+  const canManageOtherAttendance =
+    currentEmployee.role ===
+      "manager" ||
+    currentEmployee.role ===
+      "front_desk";
 
   return (
     <section className="mb-8 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -90,7 +118,9 @@ export default function EmployeePanel({
           </p>
 
           <h2 className="mt-1 text-xl font-bold text-slate-900">
-            {checkedInCount} of {activeEmployees.length} Checked In
+            {checkedInCount} of{" "}
+            {activeEmployees.length}{" "}
+            Checked In
           </h2>
         </div>
       </div>
@@ -104,111 +134,165 @@ export default function EmployeePanel({
         </div>
       )}
 
-      {activeEmployees.length === 0 ? (
+      {activeEmployees.length ===
+      0 ? (
         <div className="mt-4 rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
           No active employees
         </div>
       ) : (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {activeEmployees.map((employee) => {
-            const checkedIn = isEmployeeCheckedIn(employee);
-            const isUpdating =
-              updatingEmployeeId === employee.id;
+          {activeEmployees.map(
+            (employee) => {
+              const checkedIn =
+                isEmployeeCheckedIn(
+                  employee,
+                );
 
-            return (
-              <article
-                key={employee.id}
-                className="rounded-lg border border-slate-200 p-4"
-              >
-                <div className="flex items-start gap-3">
-                  <span
-                    aria-hidden="true"
-                    className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
-                      checkedIn
-                        ? "bg-emerald-500"
-                        : "bg-slate-300"
-                    }`}
-                  />
+              const isUpdating =
+                updatingEmployeeId ===
+                employee.id;
 
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-slate-900">
-                      {getEmployeeFullName(employee)}
-                    </h3>
+              const isCurrentEmployee =
+                employee.id ===
+                currentEmployee.id;
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      {checkedIn &&
-                      employee.attendance_session
-                        ? `Checked in ${formatTime(
-                            employee.attendance_session
-                              .checked_in_at,
-                          )}`
-                        : "Checked out"}
-                    </p>
+              const canControlAttendance =
+                isCurrentEmployee ||
+                canManageOtherAttendance;
+
+              return (
+                <article
+                  key={employee.id}
+                  className="rounded-lg border border-slate-200 p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                        checkedIn
+                          ? "bg-emerald-500"
+                          : "bg-slate-300"
+                      }`}
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-slate-900">
+                          {getEmployeeFullName(
+                            employee,
+                          )}
+                        </h3>
+
+                        {isCurrentEmployee && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                            You
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {checkedIn &&
+                        employee.attendance_session
+                          ? `Checked in ${formatTime(
+                              employee
+                                .attendance_session
+                                .checked_in_at,
+                            )}`
+                          : "Checked out"}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-4 border-t border-slate-100 pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Current Work
-                  </p>
-
-                  {employee.active_jobs.length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-600">
-                      {checkedIn
-                        ? "Available"
-                        : "No active jobs"}
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Current Work
                     </p>
-                  ) : (
-                    <ul className="mt-2 space-y-1">
-                      {employee.active_jobs.map((job) => (
-                        <li
-                          key={job.assignment_id}
-                          className="text-sm text-slate-700"
-                        >
-                          {job.customer_name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
 
-                <div className="mt-4">
-                  {checkedIn ? (
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => void checkOut(employee)}
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isUpdating
-                        ? "Checking Out..."
-                        : "Check Out"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => void checkIn(employee)}
-                      className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isUpdating
-                        ? "Checking In..."
-                        : "Check In"}
-                    </button>
+                    {employee
+                      .active_jobs
+                      .length === 0 ? (
+                      <p className="mt-2 text-sm text-slate-600">
+                        {checkedIn
+                          ? "Available"
+                          : "No active jobs"}
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {employee.active_jobs.map(
+                          (job) => (
+                            <li
+                              key={
+                                job.assignment_id
+                              }
+                              className="text-sm text-slate-700"
+                            >
+                              {
+                                job.customer_name
+                              }
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    )}
+                  </div>
+
+                  {canControlAttendance && (
+                    <div className="mt-4">
+                      {checkedIn ? (
+                        <button
+                          type="button"
+                          disabled={
+                            isUpdating
+                          }
+                          onClick={() =>
+                            void checkOut(
+                              employee,
+                            )
+                          }
+                          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isUpdating
+                            ? "Checking Out..."
+                            : "Check Out"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={
+                            isUpdating
+                          }
+                          onClick={() =>
+                            void checkIn(
+                              employee,
+                            )
+                          }
+                          className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isUpdating
+                            ? "Checking In..."
+                            : "Check In"}
+                        </button>
+                      )}
+                    </div>
                   )}
-                </div>
-              </article>
-            );
-          })}
+                </article>
+              );
+            },
+          )}
         </div>
       )}
     </section>
   );
 }
 
-function formatTime(timestamp: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+function formatTime(
+  timestamp: string,
+): string {
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  ).format(new Date(timestamp));
 }

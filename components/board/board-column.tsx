@@ -10,6 +10,7 @@ type BoardColumnProps = {
   status: JobStatus;
   jobs: Job[];
   employees: Employee[];
+  currentEmployee: Employee;
   movingJobId: string | null;
   claimingJobId: string | null;
 
@@ -31,6 +32,7 @@ export default function BoardColumn({
   status,
   jobs,
   employees,
+  currentEmployee,
   movingJobId,
   claimingJobId,
   onMoveJob,
@@ -60,6 +62,9 @@ export default function BoardColumn({
               key={job.id}
               job={job}
               employees={employees}
+              currentEmployee={
+                currentEmployee
+              }
               columnStatus={status}
               isMoving={
                 movingJobId === job.id

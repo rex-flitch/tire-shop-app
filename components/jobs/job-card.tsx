@@ -12,6 +12,7 @@ import type {
 type JobCardProps = {
   job: Job;
   employees: Employee[];
+  currentEmployee: Employee;
   columnStatus: JobStatus;
   isMoving: boolean;
   isClaiming: boolean;
@@ -32,6 +33,7 @@ type JobCardProps = {
 export default function JobCard({
   job,
   employees,
+  currentEmployee,
   columnStatus,
   isMoving,
   isClaiming,
@@ -59,6 +61,39 @@ export default function JobCard({
         null,
     );
 
+  const isTechnician =
+    currentEmployee.role ===
+    "technician";
+
+  const isFrontDesk =
+    currentEmployee.role ===
+    "front_desk";
+
+  const isManager =
+    currentEmployee.role ===
+    "manager";
+
+  const canManageAssignments =
+    isFrontDesk || isManager;
+
+  const canMoveToQueue =
+    isFrontDesk || isManager;
+
+  const canClaimJob =
+    isTechnician || isManager;
+
+  const currentEmployeeIsAssigned =
+    currentAssignments.some(
+      (assignment) =>
+        assignment.employee_id ===
+        currentEmployee.id,
+    );
+
+  const canCompleteJob =
+    isManager ||
+    (isTechnician &&
+      currentEmployeeIsAssigned);
+
   return (
     <>
       <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -84,7 +119,8 @@ export default function JobCard({
             Services
           </p>
 
-          {job.job_services.length === 0 ? (
+          {job.job_services.length ===
+          0 ? (
             <p className="mt-2 text-sm text-slate-500">
               No services selected
             </p>
@@ -152,97 +188,101 @@ export default function JobCard({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {columnStatus !==
-            "completed" && (
-            <button
-              type="button"
-              onClick={() =>
-                setAssignmentModalOpen(
-                  true,
-                )
-              }
-              className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              {currentAssignments.length ===
-              0
-                ? "Assign"
-                : "Manage Assignment"}
-            </button>
-          )}
+            "completed" &&
+            canManageAssignments && (
+              <button
+                type="button"
+                onClick={() =>
+                  setAssignmentModalOpen(
+                    true,
+                  )
+                }
+                className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {currentAssignments.length ===
+                0
+                  ? "Assign"
+                  : "Manage Assignment"}
+              </button>
+            )}
 
-          {columnStatus === "queue" && (
-            <button
-              type="button"
-              disabled={
-                isClaiming ||
-                isMoving
-              }
-              onClick={() =>
-                void onClaimJob(job)
-              }
-              className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isClaiming
-                ? "Claiming..."
-                : "Claim Job"}
-            </button>
-          )}
+          {columnStatus === "queue" &&
+            canClaimJob && (
+              <button
+                type="button"
+                disabled={
+                  isClaiming ||
+                  isMoving
+                }
+                onClick={() =>
+                  void onClaimJob(job)
+                }
+                className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isClaiming
+                  ? "Claiming..."
+                  : "Claim Job"}
+              </button>
+            )}
 
-          {columnStatus !==
-            "queue" && (
-            <button
-              type="button"
-              disabled={
-                isMoving ||
-                isClaiming
-              }
-              onClick={() =>
-                void onMoveJob(
-                  job,
-                  "queue",
-                )
-              }
-              className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Move to Queue
-            </button>
-          )}
+          {columnStatus !== "queue" &&
+            canMoveToQueue && (
+              <button
+                type="button"
+                disabled={
+                  isMoving ||
+                  isClaiming
+                }
+                onClick={() =>
+                  void onMoveJob(
+                    job,
+                    "queue",
+                  )
+                }
+                className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Move to Queue
+              </button>
+            )}
 
-          {columnStatus !==
-            "completed" && (
-            <button
-              type="button"
-              disabled={
-                isMoving ||
-                isClaiming
-              }
-              onClick={() =>
-                void onMoveJob(
-                  job,
-                  "completed",
-                )
-              }
-              className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Complete
-            </button>
-          )}
+          {columnStatus ===
+            "in_progress" &&
+            canCompleteJob && (
+              <button
+                type="button"
+                disabled={
+                  isMoving ||
+                  isClaiming
+                }
+                onClick={() =>
+                  void onMoveJob(
+                    job,
+                    "completed",
+                  )
+                }
+                className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Complete
+              </button>
+            )}
         </div>
       </article>
 
-      {assignmentModalOpen && (
-        <AssignmentModal
-          job={job}
-          employees={employees}
-          onClose={() =>
-            setAssignmentModalOpen(
-              false,
-            )
-          }
-          onAssignmentsChanged={
-            onAssignmentsChanged
-          }
-        />
-      )}
+      {assignmentModalOpen &&
+        canManageAssignments && (
+          <AssignmentModal
+            job={job}
+            employees={employees}
+            onClose={() =>
+              setAssignmentModalOpen(
+                false,
+              )
+            }
+            onAssignmentsChanged={
+              onAssignmentsChanged
+            }
+          />
+        )}
     </>
   );
 }

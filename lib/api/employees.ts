@@ -4,14 +4,17 @@ import type {
   Employee,
   EmployeeActiveJob,
   EmployeeAttendanceSession,
+  EmployeeRole,
 } from "@/types/employee";
 
 type RawEmployee = {
   id: string;
   organization_id: string;
   location_id: string;
+  auth_user_id: string | null;
   first_name: string;
   last_name: string;
+  role: EmployeeRole;
   active: boolean;
 };
 
@@ -67,8 +70,10 @@ export async function queryEmployees(
         id,
         organization_id,
         location_id,
+        auth_user_id,
         first_name,
         last_name,
+        role,
         active
       `)
       .order("first_name", {
@@ -104,15 +109,21 @@ export async function queryEmployees(
   ]);
 
   if (employeesResponse.error) {
-    throw new Error(employeesResponse.error.message);
+    throw new Error(
+      employeesResponse.error.message,
+    );
   }
 
   if (attendanceResponse.error) {
-    throw new Error(attendanceResponse.error.message);
+    throw new Error(
+      attendanceResponse.error.message,
+    );
   }
 
   if (assignmentsResponse.error) {
-    throw new Error(assignmentsResponse.error.message);
+    throw new Error(
+      assignmentsResponse.error.message,
+    );
   }
 
   const rawEmployees =
@@ -124,45 +135,69 @@ export async function queryEmployees(
   const activeAssignments =
     (assignmentsResponse.data ?? []) as unknown as RawActiveAssignment[];
 
-  return rawEmployees.map((employee): Employee => {
-    const attendanceSession =
-      attendanceSessions.find(
-        (session) => session.employee_id === employee.id,
-      ) ?? null;
+  return rawEmployees.map(
+    (employee): Employee => {
+      const attendanceSession =
+        attendanceSessions.find(
+          (session) =>
+            session.employee_id ===
+            employee.id,
+        ) ?? null;
 
-    const activeJobs = activeAssignments
-      .filter(
-        (assignment) =>
-          assignment.employee_id === employee.id,
-      )
-      .map((assignment): EmployeeActiveJob | null => {
-        const job = normalizeRelatedJob(assignment.jobs);
+      const activeJobs =
+        activeAssignments
+          .filter(
+            (assignment) =>
+              assignment.employee_id ===
+              employee.id,
+          )
+          .map(
+            (
+              assignment,
+            ): EmployeeActiveJob | null => {
+              const job =
+                normalizeRelatedJob(
+                  assignment.jobs,
+                );
 
-        if (!job || job.status === "completed") {
-          return null;
-        }
+              if (
+                !job ||
+                job.status === "completed"
+              ) {
+                return null;
+              }
 
-        return {
-          assignment_id: assignment.id,
-          job_id: assignment.job_id,
-          customer_name: job.customer_name,
-        };
-      })
-      .filter(
-        (activeJob): activeJob is EmployeeActiveJob =>
-          activeJob !== null,
-      );
+              return {
+                assignment_id:
+                  assignment.id,
+                job_id:
+                  assignment.job_id,
+                customer_name:
+                  job.customer_name,
+              };
+            },
+          )
+          .filter(
+            (
+              activeJob,
+            ): activeJob is EmployeeActiveJob =>
+              activeJob !== null,
+          );
 
-    return {
-      ...employee,
-      attendance_session: attendanceSession,
-      active_jobs: activeJobs,
-    };
-  });
+      return {
+        ...employee,
+        attendance_session:
+          attendanceSession,
+        active_jobs: activeJobs,
+      };
+    },
+  );
 }
 
 export async function getBrowserEmployees(): Promise<
   Employee[]
 > {
-  return queryEmployees(browserSupabase);
+  return queryEmployees(
+    browserSupabase,
+  );
 }

@@ -5,6 +5,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { logoutAction } from "@/app/actions/auth";
 import {
   claimJobAction,
   moveJobAction,
@@ -12,18 +13,27 @@ import {
 import BoardColumn from "@/components/board/board-column";
 import CompletedDrawer from "@/components/board/completed-drawer";
 import EmployeePanel from "@/components/employees/employee-panel";
+import CreateJobModal from "@/components/jobs/create-job-modal";
 import { getBrowserEmployees } from "@/lib/api/employees";
 import { getBrowserJobs } from "@/lib/api/jobs";
 import { supabase } from "@/lib/supabase/browser";
-import type { Employee } from "@/types/employee";
+import {
+  getEmployeeFullName,
+  getEmployeeRoleLabel,
+  isEmployeeCheckedIn,
+  type Employee,
+} from "@/types/employee";
 import type {
   Job,
   JobStatus,
 } from "@/types/job";
+import type { ServiceType } from "@/types/service";
 
 type JobBoardProps = {
   initialJobs: Job[];
   initialEmployees: Employee[];
+  initialServiceTypes: ServiceType[];
+  currentEmployeeId: string;
 };
 
 type ActiveJobStatus =
@@ -49,6 +59,8 @@ const columns: ColumnDefinition[] = [
 export default function JobBoard({
   initialJobs,
   initialEmployees,
+  initialServiceTypes,
+  currentEmployeeId,
 }: JobBoardProps) {
   const [jobs, setJobs] =
     useState<Job[]>(initialJobs);
@@ -64,13 +76,33 @@ export default function JobBoard({
   const [movingJobId, setMovingJobId] =
     useState<string | null>(null);
 
-  const [claimingJobId, setClaimingJobId] =
-    useState<string | null>(null);
+  const [
+    claimingJobId,
+    setClaimingJobId,
+  ] = useState<string | null>(null);
 
   const [
     completedDrawerOpen,
     setCompletedDrawerOpen,
   ] = useState(false);
+
+  const [
+    createJobModalOpen,
+    setCreateJobModalOpen,
+  ] = useState(false);
+
+  const currentEmployee =
+    employees.find(
+      (employee) =>
+        employee.id ===
+        currentEmployeeId,
+    ) ?? null;
+
+  const canCreateJobs =
+    currentEmployee?.role ===
+      "front_desk" ||
+    currentEmployee?.role ===
+      "manager";
 
   const loadJobs = useCallback(
     async () => {
@@ -169,7 +201,8 @@ export default function JobBoard({
           {
             event: "*",
             schema: "public",
-            table: "attendance_sessions",
+            table:
+              "attendance_sessions",
           },
           () => {
             void loadEmployees();
@@ -225,7 +258,9 @@ export default function JobBoard({
 
     try {
       const result =
-        await claimJobAction(job.id);
+        await claimJobAction(
+          job.id,
+        );
 
       if (!result.success) {
         setMessage(result.message);
@@ -242,6 +277,17 @@ export default function JobBoard({
   }
 
   const handleAssignmentsChanged =
+    useCallback(async () => {
+      await Promise.all([
+        loadJobs(),
+        loadEmployees(),
+      ]);
+    }, [
+      loadEmployees,
+      loadJobs,
+    ]);
+
+  const handleJobCreated =
     useCallback(async () => {
       await Promise.all([
         loadJobs(),
@@ -275,43 +321,118 @@ export default function JobBoard({
       return bTime - aTime;
     });
 
+  const activeJobCount =
+    jobs.filter(
+      (job) =>
+        job.status !== "completed",
+    ).length;
+
   return (
     <main className="min-h-screen bg-slate-100 p-6">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-            Tire Shop Workflow
-          </p>
+        <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              Tire Shop Workflow
+            </p>
 
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">
-            Today&apos;s Jobs
-          </h1>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">
+              Today&apos;s Jobs
+            </h1>
 
-          <p className="mt-2 text-sm text-slate-600">
-            {
-              jobs.filter(
-                (job) =>
-                  job.status !==
-                  "completed",
-              ).length
-            }{" "}
-            active{" "}
-            {jobs.filter(
-              (job) =>
-                job.status !==
-                "completed",
-            ).length === 1
-              ? "job"
-              : "jobs"}
-          </p>
+            <p className="mt-2 text-sm text-slate-600">
+              {activeJobCount} active{" "}
+              {activeJobCount === 1
+                ? "job"
+                : "jobs"}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-start gap-3">
+            {canCreateJobs && (
+              <button
+                type="button"
+                onClick={() =>
+                  setCreateJobModalOpen(
+                    true,
+                  )
+                }
+                className="rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white shadow-sm hover:bg-slate-700"
+              >
+                + New Job
+              </button>
+            )}
+
+            {currentEmployee && (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="flex items-start gap-6">
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {getEmployeeFullName(
+                        currentEmployee,
+                      )}
+                    </p>
+
+                    <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                      <span>
+                        {getEmployeeRoleLabel(
+                          currentEmployee.role,
+                        )}
+                      </span>
+
+                      <span
+                        aria-hidden="true"
+                      >
+                        ·
+                      </span>
+
+                      <span
+                        className={
+                          isEmployeeCheckedIn(
+                            currentEmployee,
+                          )
+                            ? "font-medium text-emerald-700"
+                            : "font-medium text-slate-500"
+                        }
+                      >
+                        {isEmployeeCheckedIn(
+                          currentEmployee,
+                        )
+                          ? "Checked In"
+                          : "Checked Out"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <form
+                    action={
+                      logoutAction
+                    }
+                  >
+                    <button
+                      type="submit"
+                      className="text-sm font-semibold text-slate-500 hover:text-slate-900"
+                    >
+                      Log Out
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
-        <EmployeePanel
-          employees={employees}
-          onAttendanceChanged={
-            loadEmployees
-          }
-        />
+        {currentEmployee && (
+          <EmployeePanel
+            employees={employees}
+            currentEmployee={
+              currentEmployee
+            }
+            onAttendanceChanged={
+              loadEmployees
+            }
+          />
+        )}
 
         {message && (
           <div
@@ -322,53 +443,58 @@ export default function JobBoard({
           </div>
         )}
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          {columns.map(
-            (column) => {
-              const columnJobs =
-                jobs.filter(
-                  (job) =>
-                    job.status ===
-                    column.status,
-                );
+        {currentEmployee && (
+          <section className="grid gap-6 lg:grid-cols-2">
+            {columns.map(
+              (column) => {
+                const columnJobs =
+                  jobs.filter(
+                    (job) =>
+                      job.status ===
+                      column.status,
+                  );
 
-              return (
-                <BoardColumn
-                  key={
-                    column.status
-                  }
-                  title={
-                    column.title
-                  }
-                  status={
-                    column.status
-                  }
-                  jobs={
-                    columnJobs
-                  }
-                  employees={
-                    employees
-                  }
-                  movingJobId={
-                    movingJobId
-                  }
-                  claimingJobId={
-                    claimingJobId
-                  }
-                  onMoveJob={
-                    moveJob
-                  }
-                  onClaimJob={
-                    claimJob
-                  }
-                  onAssignmentsChanged={
-                    handleAssignmentsChanged
-                  }
-                />
-              );
-            },
-          )}
-        </section>
+                return (
+                  <BoardColumn
+                    key={
+                      column.status
+                    }
+                    title={
+                      column.title
+                    }
+                    status={
+                      column.status
+                    }
+                    jobs={
+                      columnJobs
+                    }
+                    employees={
+                      employees
+                    }
+                    currentEmployee={
+                      currentEmployee
+                    }
+                    movingJobId={
+                      movingJobId
+                    }
+                    claimingJobId={
+                      claimingJobId
+                    }
+                    onMoveJob={
+                      moveJob
+                    }
+                    onClaimJob={
+                      claimJob
+                    }
+                    onAssignmentsChanged={
+                      handleAssignmentsChanged
+                    }
+                  />
+                );
+              },
+            )}
+          </section>
+        )}
 
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <button
@@ -405,17 +531,45 @@ export default function JobBoard({
         </section>
       </div>
 
-      <CompletedDrawer
-        jobs={completedJobs}
-        isOpen={
-          completedDrawerOpen
-        }
-        onClose={() =>
-          setCompletedDrawerOpen(
-            false,
-          )
-        }
-      />
+      {currentEmployee && (
+        <CompletedDrawer
+          jobs={completedJobs}
+          isOpen={
+            completedDrawerOpen
+          }
+          onClose={() =>
+            setCompletedDrawerOpen(
+              false,
+            )
+          }
+          currentEmployee={
+            currentEmployee
+          }
+          onJobReopened={async () => {
+            await Promise.all([
+              loadJobs(),
+              loadEmployees(),
+            ]);
+          }}
+        />
+      )}
+
+      {createJobModalOpen &&
+        canCreateJobs && (
+          <CreateJobModal
+            serviceTypes={
+              initialServiceTypes
+            }
+            onClose={() =>
+              setCreateJobModalOpen(
+                false,
+              )
+            }
+            onJobCreated={
+              handleJobCreated
+            }
+          />
+        )}
     </main>
   );
 }

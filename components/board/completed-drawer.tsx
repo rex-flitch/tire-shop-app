@@ -1,20 +1,76 @@
 "use client";
 
+import { useState } from "react";
+import { reopenJobAction } from "@/app/actions/jobs";
+import type { Employee } from "@/types/employee";
 import type { Job } from "@/types/job";
 
 type CompletedDrawerProps = {
   jobs: Job[];
   isOpen: boolean;
   onClose: () => void;
+  currentEmployee: Employee;
+  onJobReopened: () => Promise<void>;
 };
 
 export default function CompletedDrawer({
   jobs,
   isOpen,
   onClose,
+  currentEmployee,
+  onJobReopened,
 }: CompletedDrawerProps) {
+  const [
+    reopeningJobId,
+    setReopeningJobId,
+  ] = useState<string | null>(null);
+
+  const [
+    message,
+    setMessage,
+  ] = useState<string | null>(null);
+
   if (!isOpen) {
     return null;
+  }
+
+  const canReopenJobs =
+    currentEmployee.role === "manager";
+
+  async function handleReopen(
+    job: Job,
+  ) {
+    const confirmed =
+      window.confirm(
+        `Reopen ${job.customer_name}'s job and return it to the queue?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setMessage(null);
+    setReopeningJobId(job.id);
+
+    try {
+      const result =
+        await reopenJobAction(job.id);
+
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+
+      await onJobReopened();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The job could not be reopened.",
+      );
+    } finally {
+      setReopeningJobId(null);
+    }
   }
 
   return (
@@ -48,7 +104,9 @@ export default function CompletedDrawer({
 
               <p className="mt-1 text-sm text-slate-600">
                 {jobs.length} completed{" "}
-                {jobs.length === 1 ? "job" : "jobs"}
+                {jobs.length === 1
+                  ? "job"
+                  : "jobs"}
               </p>
             </div>
 
@@ -63,6 +121,15 @@ export default function CompletedDrawer({
         </header>
 
         <div className="space-y-4 p-5">
+          {message && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            >
+              {message}
+            </div>
+          )}
+
           {jobs.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
               <p className="font-semibold text-slate-700">
@@ -70,7 +137,8 @@ export default function CompletedDrawer({
               </p>
 
               <p className="mt-1 text-sm text-slate-500">
-                Jobs completed today will appear here.
+                Jobs completed today
+                will appear here.
               </p>
             </div>
           ) : (
@@ -78,6 +146,16 @@ export default function CompletedDrawer({
               <CompletedJobCard
                 key={job.id}
                 job={job}
+                canReopen={
+                  canReopenJobs
+                }
+                isReopening={
+                  reopeningJobId ===
+                  job.id
+                }
+                onReopen={() =>
+                  handleReopen(job)
+                }
               />
             ))
           )}
@@ -89,10 +167,16 @@ export default function CompletedDrawer({
 
 type CompletedJobCardProps = {
   job: Job;
+  canReopen: boolean;
+  isReopening: boolean;
+  onReopen: () => void;
 };
 
 function CompletedJobCard({
   job,
+  canReopen,
+  isReopening,
+  onReopen,
 }: CompletedJobCardProps) {
   const vehicle = [
     job.vehicle_year,
@@ -117,7 +201,8 @@ function CompletedJobCard({
           </h3>
 
           <p className="mt-1 text-sm text-slate-600">
-            {vehicle || "Vehicle not entered"}
+            {vehicle ||
+              "Vehicle not entered"}
           </p>
         </div>
 
@@ -132,20 +217,27 @@ function CompletedJobCard({
         </p>
 
         <ul className="mt-2 space-y-1">
-          {job.job_services.map((service) => (
-            <li
-              key={service.id}
-              className="flex justify-between gap-4 text-sm"
-            >
-              <span className="text-slate-800">
-                {service.service_name}
-              </span>
+          {job.job_services.map(
+            (service) => (
+              <li
+                key={service.id}
+                className="flex justify-between gap-4 text-sm"
+              >
+                <span className="text-slate-800">
+                  {
+                    service.service_name
+                  }
+                </span>
 
-              <span className="shrink-0 text-slate-500">
-                {service.estimated_minutes} min
-              </span>
-            </li>
-          ))}
+                <span className="shrink-0 text-slate-500">
+                  {
+                    service.estimated_minutes
+                  }{" "}
+                  min
+                </span>
+              </li>
+            ),
+          )}
         </ul>
       </div>
 
@@ -160,24 +252,32 @@ function CompletedJobCard({
           </p>
         ) : (
           <div className="mt-2 flex flex-wrap gap-2">
-            {assignments.map((assignment) => {
-              const employee =
-                assignment.employee;
+            {assignments.map(
+              (assignment) => {
+                const employee =
+                  assignment.employee;
 
-              if (!employee) {
-                return null;
-              }
+                if (!employee) {
+                  return null;
+                }
 
-              return (
-                <span
-                  key={assignment.id}
-                  className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
-                >
-                  {employee.first_name}{" "}
-                  {employee.last_name}
-                </span>
-              );
-            })}
+                return (
+                  <span
+                    key={
+                      assignment.id
+                    }
+                    className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+                  >
+                    {
+                      employee.first_name
+                    }{" "}
+                    {
+                      employee.last_name
+                    }
+                  </span>
+                );
+              },
+            )}
           </div>
         )}
       </div>
@@ -192,11 +292,28 @@ function CompletedJobCard({
           label="Completed"
           value={
             job.completed_at
-              ? formatTime(job.completed_at)
+              ? formatTime(
+                  job.completed_at,
+                )
               : "Unknown"
           }
         />
       </div>
+
+      {canReopen && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            disabled={isReopening}
+            onClick={onReopen}
+            className="w-full rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isReopening
+              ? "Reopening..."
+              : "Reopen to Queue"}
+          </button>
+        </div>
+      )}
     </article>
   );
 }
@@ -226,8 +343,11 @@ function TimeStat({
 function formatTime(
   timestamp: string,
 ): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  ).format(new Date(timestamp));
 }

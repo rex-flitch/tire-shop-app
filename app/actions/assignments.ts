@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getCurrentEmployee } from "@/lib/auth/current-employee";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type AssignmentResult =
@@ -26,7 +27,8 @@ export async function setJobAssignmentsAction(
   if (!Array.isArray(employeeIds)) {
     return {
       success: false,
-      message: "The employee selection is invalid.",
+      message:
+        "The employee selection is invalid.",
     };
   }
 
@@ -34,7 +36,8 @@ export async function setJobAssignmentsAction(
     ...new Set(
       employeeIds.filter(
         (employeeId) =>
-          typeof employeeId === "string" &&
+          typeof employeeId ===
+            "string" &&
           employeeId.length > 0,
       ),
     ),
@@ -43,26 +46,95 @@ export async function setJobAssignmentsAction(
   const supabase =
     await createSupabaseServerClient();
 
-  const { error } = await supabase.rpc(
-    "set_job_assignments",
-    {
-      p_job_id: jobId,
-      p_employee_ids: uniqueEmployeeIds,
-    },
-  );
+  try {
+    const currentEmployee =
+      await getCurrentEmployee(
+        supabase,
+      );
 
-  console.log(error);
+    if (
+      currentEmployee.role !==
+        "manager" &&
+      currentEmployee.role !==
+        "front_desk"
+    ) {
+      return {
+        success: false,
+        message:
+          "You do not have permission to manage job assignments.",
+      };
+    }
 
-  if (error) {
+    const {
+      data: job,
+      error: jobError,
+    } = await supabase
+      .from("jobs")
+      .select(`
+        id,
+        organization_id,
+        location_id
+      `)
+      .eq("id", jobId)
+      .maybeSingle();
+
+    if (jobError) {
+      return {
+        success: false,
+        message: jobError.message,
+      };
+    }
+
+    if (!job) {
+      return {
+        success: false,
+        message:
+          "The selected job does not exist.",
+      };
+    }
+
+    if (
+      job.organization_id !==
+        currentEmployee.organization_id ||
+      job.location_id !==
+        currentEmployee.location_id
+    ) {
+      return {
+        success: false,
+        message:
+          "You cannot manage assignments for this job.",
+      };
+    }
+
+    const { error } =
+      await supabase.rpc(
+        "set_job_assignments",
+        {
+          p_job_id: jobId,
+          p_employee_ids:
+            uniqueEmployeeIds,
+        },
+      );
+
+    if (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+
+    revalidatePath("/");
+
+    return {
+      success: true,
+    };
+  } catch (error) {
     return {
       success: false,
-      message: error.message,
+      message:
+        error instanceof Error
+          ? error.message
+          : "The assignments could not be updated.",
     };
   }
-
-  revalidatePath("/");
-
-  return {
-    success: true,
-  };
 }
