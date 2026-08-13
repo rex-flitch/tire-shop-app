@@ -1,6 +1,9 @@
 import JobCard from "@/components/jobs/job-card";
 import type { Employee } from "@/types/employee";
-import type { Job, JobStatus } from "@/types/job";
+import type {
+  Job,
+  JobStatus,
+} from "@/types/job";
 
 type BoardColumnProps = {
   title: string;
@@ -8,11 +11,19 @@ type BoardColumnProps = {
   jobs: Job[];
   employees: Employee[];
   movingJobId: string | null;
+  claimingJobId: string | null;
+
   onMoveJob: (
     job: Job,
     nextStatus: JobStatus,
   ) => Promise<void>;
-  onAssignmentsChanged: () => Promise<void>;
+
+  onClaimJob: (
+    job: Job,
+  ) => Promise<void>;
+
+  onAssignmentsChanged:
+    () => Promise<void>;
 };
 
 export default function BoardColumn({
@@ -21,7 +32,9 @@ export default function BoardColumn({
   jobs,
   employees,
   movingJobId,
+  claimingJobId,
   onMoveJob,
+  onClaimJob,
   onAssignmentsChanged,
 }: BoardColumnProps) {
   return (
@@ -48,8 +61,18 @@ export default function BoardColumn({
               job={job}
               employees={employees}
               columnStatus={status}
-              isMoving={movingJobId === job.id}
-              onMoveJob={onMoveJob}
+              isMoving={
+                movingJobId === job.id
+              }
+              isClaiming={
+                claimingJobId === job.id
+              }
+              onMoveJob={
+                onMoveJob
+              }
+              onClaimJob={
+                onClaimJob
+              }
               onAssignmentsChanged={
                 onAssignmentsChanged
               }

@@ -13,6 +13,15 @@ type MoveJobResult =
       message: string;
     };
 
+type ClaimJobResult =
+  | {
+      success: true;
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
 export async function moveJobAction(
   jobId: string,
   currentStartedAt: string | null,
@@ -74,6 +83,56 @@ export async function moveJobAction(
     .from("jobs")
     .update(updates)
     .eq("id", jobId);
+
+  if (error) {
+    return {
+      success: false,
+      message: error.message,
+    };
+  }
+
+  revalidatePath("/");
+
+  return {
+    success: true,
+  };
+}
+
+export async function claimJobAction(
+  jobId: string,
+): Promise<ClaimJobResult> {
+  if (!jobId) {
+    return {
+      success: false,
+      message: "A job ID is required.",
+    };
+  }
+
+  const supabase =
+    await createSupabaseServerClient();
+
+  const {
+    data: claimsData,
+    error: claimsError,
+  } = await supabase.auth.getClaims();
+
+  if (
+    claimsError ||
+    !claimsData?.claims?.sub
+  ) {
+    return {
+      success: false,
+      message:
+        "You must be logged in to claim a job.",
+    };
+  }
+
+  const { error } = await supabase.rpc(
+    "claim_job",
+    {
+      p_job_id: jobId,
+    },
+  );
 
   if (error) {
     return {

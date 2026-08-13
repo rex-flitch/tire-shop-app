@@ -5,7 +5,10 @@ import {
   useEffect,
   useState,
 } from "react";
-import { moveJobAction } from "@/app/actions/jobs";
+import {
+  claimJobAction,
+  moveJobAction,
+} from "@/app/actions/jobs";
 import BoardColumn from "@/components/board/board-column";
 import CompletedDrawer from "@/components/board/completed-drawer";
 import EmployeePanel from "@/components/employees/employee-panel";
@@ -59,6 +62,9 @@ export default function JobBoard({
     useState<string | null>(null);
 
   const [movingJobId, setMovingJobId] =
+    useState<string | null>(null);
+
+  const [claimingJobId, setClaimingJobId] =
     useState<string | null>(null);
 
   const [
@@ -211,6 +217,30 @@ export default function JobBoard({
     }
   }
 
+  async function claimJob(
+    job: Job,
+  ) {
+    setMessage(null);
+    setClaimingJobId(job.id);
+
+    try {
+      const result =
+        await claimJobAction(job.id);
+
+      if (!result.success) {
+        setMessage(result.message);
+        return;
+      }
+
+      await Promise.all([
+        loadJobs(),
+        loadEmployees(),
+      ]);
+    } finally {
+      setClaimingJobId(null);
+    }
+  }
+
   const handleAssignmentsChanged =
     useCallback(async () => {
       await Promise.all([
@@ -322,8 +352,14 @@ export default function JobBoard({
                   movingJobId={
                     movingJobId
                   }
+                  claimingJobId={
+                    claimingJobId
+                  }
                   onMoveJob={
                     moveJob
+                  }
+                  onClaimJob={
+                    claimJob
                   }
                   onAssignmentsChanged={
                     handleAssignmentsChanged

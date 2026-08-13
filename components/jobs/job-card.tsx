@@ -4,18 +4,29 @@ import { useState } from "react";
 import AssignmentModal from "@/components/jobs/assignment-modal";
 import AssignmentName from "@/components/jobs/assignment-name";
 import type { Employee } from "@/types/employee";
-import type { Job, JobStatus } from "@/types/job";
+import type {
+  Job,
+  JobStatus,
+} from "@/types/job";
 
 type JobCardProps = {
   job: Job;
   employees: Employee[];
   columnStatus: JobStatus;
   isMoving: boolean;
+  isClaiming: boolean;
+
   onMoveJob: (
     job: Job,
     nextStatus: JobStatus,
   ) => Promise<void>;
-  onAssignmentsChanged: () => Promise<void>;
+
+  onClaimJob: (
+    job: Job,
+  ) => Promise<void>;
+
+  onAssignmentsChanged:
+    () => Promise<void>;
 };
 
 export default function JobCard({
@@ -23,11 +34,15 @@ export default function JobCard({
   employees,
   columnStatus,
   isMoving,
+  isClaiming,
   onMoveJob,
+  onClaimJob,
   onAssignmentsChanged,
 }: JobCardProps) {
-  const [assignmentModalOpen, setAssignmentModalOpen] =
-    useState(false);
+  const [
+    assignmentModalOpen,
+    setAssignmentModalOpen,
+  ] = useState(false);
 
   const vehicle = [
     job.vehicle_year,
@@ -37,10 +52,12 @@ export default function JobCard({
     .filter(Boolean)
     .join(" ");
 
-  const currentAssignments = job.job_assignments.filter(
-    (assignment) =>
-      assignment.unassigned_at === null,
-  );
+  const currentAssignments =
+    job.job_assignments.filter(
+      (assignment) =>
+        assignment.unassigned_at ===
+        null,
+    );
 
   return (
     <>
@@ -52,7 +69,8 @@ export default function JobCard({
             </h3>
 
             <p className="mt-1 text-sm text-slate-600">
-              {vehicle || "Vehicle not entered"}
+              {vehicle ||
+                "Vehicle not entered"}
             </p>
           </div>
 
@@ -72,26 +90,34 @@ export default function JobCard({
             </p>
           ) : (
             <ul className="mt-2 space-y-1">
-              {job.job_services.map((service) => (
-                <li
-                  key={service.id}
-                  className="flex items-center justify-between gap-3 text-sm"
-                >
-                  <span className="font-medium text-slate-800">
-                    {service.service_name}
-                  </span>
+              {job.job_services.map(
+                (service) => (
+                  <li
+                    key={service.id}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="font-medium text-slate-800">
+                      {
+                        service.service_name
+                      }
+                    </span>
 
-                  <span className="shrink-0 text-xs text-slate-500">
-                    {service.estimated_minutes} min
-                  </span>
-                </li>
-              ))}
+                    <span className="shrink-0 text-xs text-slate-500">
+                      {
+                        service.estimated_minutes
+                      }{" "}
+                      min
+                    </span>
+                  </li>
+                ),
+              )}
             </ul>
           )}
 
           {job.license_plate && (
             <p className="mt-3 text-xs uppercase tracking-wide text-slate-500">
-              Plate: {job.license_plate}
+              Plate:{" "}
+              {job.license_plate}
             </p>
           )}
         </div>
@@ -101,43 +127,79 @@ export default function JobCard({
             Assigned Employees
           </p>
 
-          {currentAssignments.length === 0 ? (
+          {currentAssignments.length ===
+          0 ? (
             <p className="mt-2 text-sm text-slate-500">
               Unassigned
             </p>
           ) : (
             <div className="mt-2 space-y-2">
-              {currentAssignments.map((assignment) => (
-                <AssignmentName
-                  key={assignment.id}
-                  assignment={assignment}
-                />
-              ))}
+              {currentAssignments.map(
+                (assignment) => (
+                  <AssignmentName
+                    key={
+                      assignment.id
+                    }
+                    assignment={
+                      assignment
+                    }
+                  />
+                ),
+              )}
             </div>
           )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {columnStatus !== "completed" && (
+          {columnStatus !==
+            "completed" && (
             <button
               type="button"
               onClick={() =>
-                setAssignmentModalOpen(true)
+                setAssignmentModalOpen(
+                  true,
+                )
               }
               className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
-              {currentAssignments.length === 0
+              {currentAssignments.length ===
+              0
                 ? "Assign"
                 : "Manage Assignment"}
             </button>
           )}
 
-          {columnStatus !== "queue" && (
+          {columnStatus === "queue" && (
             <button
               type="button"
-              disabled={isMoving}
+              disabled={
+                isClaiming ||
+                isMoving
+              }
               onClick={() =>
-                void onMoveJob(job, "queue")
+                void onClaimJob(job)
+              }
+              className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isClaiming
+                ? "Claiming..."
+                : "Claim Job"}
+            </button>
+          )}
+
+          {columnStatus !==
+            "queue" && (
+            <button
+              type="button"
+              disabled={
+                isMoving ||
+                isClaiming
+              }
+              onClick={() =>
+                void onMoveJob(
+                  job,
+                  "queue",
+                )
               }
               className="rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -145,25 +207,19 @@ export default function JobCard({
             </button>
           )}
 
-          {columnStatus !== "in_progress" && (
+          {columnStatus !==
+            "completed" && (
             <button
               type="button"
-              disabled={isMoving}
-              onClick={() =>
-                void onMoveJob(job, "in_progress")
+              disabled={
+                isMoving ||
+                isClaiming
               }
-              className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Start Job
-            </button>
-          )}
-
-          {columnStatus !== "completed" && (
-            <button
-              type="button"
-              disabled={isMoving}
               onClick={() =>
-                void onMoveJob(job, "completed")
+                void onMoveJob(
+                  job,
+                  "completed",
+                )
               }
               className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -177,8 +233,14 @@ export default function JobCard({
         <AssignmentModal
           job={job}
           employees={employees}
-          onClose={() => setAssignmentModalOpen(false)}
-          onAssignmentsChanged={onAssignmentsChanged}
+          onClose={() =>
+            setAssignmentModalOpen(
+              false,
+            )
+          }
+          onAssignmentsChanged={
+            onAssignmentsChanged
+          }
         />
       )}
     </>
